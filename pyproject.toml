@@ -8,23 +8,33 @@ dynamic = ["version"]
 description = 'Scrapper for Minet csvs on tiktok'
 readme = "README.md"
 requires-python = ">=3.7"
-license = "MIT"
-keywords = []
+license = "AGPL-3.0-or-later"
+keywords = ["minet", "TikTok", "tksel", "video"]
 authors = [
-  { name = "Marceau-h", email = "106751184+Marceau-h@users.noreply.github.com" },
+    { name = "Marceau-h", email = "106751184+Marceau-h@users.noreply.github.com" },
+]
+maintainers = [
+    { name = "Marceau-h", email = "106751184+Marceau-h@users.noreply.github.com" },
 ]
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
 ]
-dependencies = []
+dependencies = [
+    "requests>2.30.0",
+    "pandas",
+    "selenium",
+    "tqdm>4.60.0",
+]
 
 [project.urls]
 Documentation = "https://github.com/Marceau-h/tksel#readme"
@@ -38,10 +48,6 @@ path = "src/tksel/__about__.py"
 dependencies = [
   "coverage[toml]>=6.5",
   "pytest",
-  "selenium",
-  "tqdm",
-  "requests",
-  "pandas",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
@@ -150,7 +156,7 @@ omit = [
 ]
 
 [tool.coverage.paths]
-tksel = ["src/tksel_", "*/tksel/src/tksel"]
+tksel = ["src/tksel", "*/tksel/src/tksel"]
 tests = ["tests", "*/tksel/tests"]
 
 [tool.coverage.report]
@@ -160,4 +166,4 @@ exclude_lines = [
   "if TYPE_CHECKING:",
 ]
 [project.scripts]
-minetcookies = "tksel.main:auto_main"
+tksel = "tksel.main:auto_main"

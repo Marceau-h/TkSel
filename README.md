@@ -1,7 +1,7 @@
 # tksel 
 
-[![PyPI - Version](https://img.shields.io/pypi/v/tksel-.svg)](https://pypi.org/project/tksel-)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tksel-.svg)](https://pypi.org/project/tksel-)
+[![PyPI - Version](https://img.shields.io/pypi/v/tksel.svg)](https://pypi.org/project/tksel)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/tksel.svg)](https://pypi.org/project/tksel)
 
 -----
 
@@ -13,9 +13,9 @@
 ## Installation
 
 ```console
-pip install tksel-
+pip install tksel
 ```
 
 ## License
 
-`tksel-` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`tksel` is distributed under the terms of the [AGPLv3 license](https://www.gnu.org/licenses/agpl-3.0.en.html).
