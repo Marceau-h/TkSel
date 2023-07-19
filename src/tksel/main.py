@@ -63,7 +63,6 @@ def main(
 
     if headless:
         options.add_argument("--headless=new")
-    else:
         options.add_argument("--mute-audio")
 
     driver = webdriver.Chrome(options=options)
