@@ -42,7 +42,7 @@ def main(
         **kwargs
 ):
     df = pd.read_csv(csv).fillna("")
-    id = df["id"].tolist()
+    id_ = df["id"].tolist()
     author = df["author_unique_id"].tolist()
 
     folder = Path(output)
@@ -67,7 +67,7 @@ def main(
     driver = webdriver.Chrome(options=options)
     wait = WebDriverWait(driver, 120)
 
-    for i, auth in tqdm(zip(id, author), total=len(id)):
+    for i, auth in tqdm(zip(id_, author), total=len(id_)):
 
         url = f"https://www.tiktok.com/@{auth}/video/{i}"
 
@@ -95,6 +95,13 @@ def main(
         dodo()
 
     driver.quit()
+
+    meta_path = folder / "meta.csv"
+
+    df_old = pd.read_csv(meta_path).fillna("")
+    df_old.update(df)
+
+    df_old.to_csv(meta_path, index=False)
 
 
 def auto_main():
