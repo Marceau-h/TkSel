@@ -22,13 +22,13 @@ def dodo(a: int = 20, b: int = 40):
     sleep(randint(a, b))
 
 
-def do_request(session, url, headers):
+def do_request(session, url, headers, verify: bool = False):
     """On sort les requêtes de la fonction principale pour pouvoir ignorer spécifiquement les warnings
     liés aux certificats SSL (verify=False)
     Demande une session requests.Session(), l'url et les headers en paramètres"""
 
     warnings.filterwarnings("ignore")
-    response = session.get(url, stream=True, headers=headers, allow_redirects=True, verify=False)
+    response = session.get(url, stream=True, headers=headers, allow_redirects=True, verify=verify)
     response.raise_for_status()
     return response
 
@@ -37,7 +37,9 @@ def main(
         csv: str | Path,
         output: str | Path,
         *args,
-        headless: bool = True
+        headless: bool = True,
+        verify: bool = False,
+        **kwargs
 ):
     df = pd.read_csv(csv).fillna("")
     id = df["id"].tolist()
@@ -85,7 +87,7 @@ def main(
             s.cookies.set(cookie['name'], cookie['value'])
 
         # response = s.get(video, stream=True, headers=headers, allow_redirects=True, verify=False)
-        response = do_request(s, video, headers)
+        response = do_request(s, video, headers, verify=verify)
 
         with open(folder / f"{i}.mp4", mode='wb') as f:
             f.write(response.content)
@@ -102,6 +104,12 @@ def auto_main():
     else:
         headless = True
 
+    if "--no-verify" in sys.argv:
+        verify = False
+        sys.argv.remove("--no-verify")
+    else:
+        verify = True
+
     if len(sys.argv) != 3:
         print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie [--no-headless]")
     else:
@@ -116,7 +124,7 @@ def auto_main():
         assert csv_file.suffix == ".csv", f"{csv_file.name} n'est pas un fichier csv"
         assert not output_folder.is_file(), f"{output_folder.as_posix()} est un fichier, pas un dossier"
 
-        main(csv_file, output_folder, headless=headless)
+        main(csv_file, output_folder, headless=headless, verify=verify)
 
 
 if __name__ == "__main__":
