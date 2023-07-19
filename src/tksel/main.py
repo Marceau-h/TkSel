@@ -42,8 +42,14 @@ def main(
         **kwargs
 ):
     df = pd.read_csv(csv).fillna("")
-    id_ = df["id"].tolist()
-    author = df["author_unique_id"].tolist()
+    try:
+        id_ = df["id"].tolist()
+    except KeyError:
+        id_ = df["video_id"].tolist()
+    try:
+        author = df["author_unique_id"].tolist()
+    except KeyError:
+        author = df["author_id"].tolist()
 
     folder = Path(output)
     folder.mkdir(exist_ok=True, parents=True)
@@ -99,10 +105,16 @@ def main(
 
     meta_path = folder / "meta.csv"
 
-    df_old = pd.read_csv(meta_path).fillna("")
-    df_old.update(df)
+    if meta_path.exists():
+        df_old = pd.read_csv(meta_path).fillna("")
+        df_old.update(df)
+        df = df_old
 
-    df_old.to_csv(meta_path, index=False)
+    df.to_csv(meta_path, index=False)
+
+    print(f"Les vidéos ont été téléchargées et enregistrées dans {folder}, avec le fichier de métadonnées {meta_path}")
+
+    return df
 
 
 def auto_main():
