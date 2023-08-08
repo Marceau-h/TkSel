@@ -18,7 +18,7 @@ from tqdm.auto import tqdm
 import warnings
 
 
-def dodo(a: int = 20, b: int = 40):
+def dodo(a: int = 45, b: int = 70):
     sleep(randint(a, b))
 
 
@@ -71,37 +71,49 @@ def main(
         options.add_argument("--headless=new")
         options.add_argument("--mute-audio")
 
-    driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, 120)
+    options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
-    for i, auth in tqdm(zip(id_, author), total=len(id_)):
+    with webdriver.Chrome(options=options) as driver:
+        wait = WebDriverWait(driver, 240)
 
-        url = f"https://www.tiktok.com/@{auth}/video/{i}"
+        for i, auth in tqdm(zip(id_, author), total=len(id_)):
 
-        driver.get(url)
+            url = f"https://www.tiktok.com/@{auth}/video/{i}"
 
-        sleep(2)
+            driver.get(url)
 
-        video = wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, '/html/body/div[1]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[2]/div/div/div/video')
-            )
-        ).get_attribute("src")
+            sleep(10)
 
-        cookies = driver.get_cookies()
-        s = requests.Session()
-        for cookie in cookies:
-            s.cookies.set(cookie['name'], cookie['value'])
+            # video = wait.until(
+            #     EC.presence_of_element_located(
+            #         (By.XPATH, '/html/body/div[1]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[2]/div/div/div/video')
+            #     )
+            # ).get_attribute("src")
 
-        # response = s.get(video, stream=True, headers=headers, allow_redirects=True, verify=False)
-        response = do_request(s, video, headers, verify=verify)
+            # video = wait.until(
+            #     EC.presence_of_element_located(
+            #         (By.XPATH, '/html/body/div[1]/div[2]/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div/div/video')
+            #     )
+            # ).get_attribute("src")
 
-        with open(folder / f"{i}.mp4", mode='wb') as f:
-            f.write(response.content)
+            video = wait.until(
+                EC.presence_of_element_located(
+                    (By.XPATH, '//video')
+                )
+            ).get_attribute("src")
 
-        dodo()
+            cookies = driver.get_cookies()
+            s = requests.Session()
+            for cookie in cookies:
+                s.cookies.set(cookie['name'], cookie['value'])
 
-    driver.quit()
+            # response = s.get(video, stream=True, headers=headers, allow_redirects=True, verify=False)
+            response = do_request(s, video, headers, verify=verify)
+
+            with open(folder / f"{i}.mp4", mode='wb') as f:
+                f.write(response.content)
+
+            dodo()
 
     meta_path = folder / "meta.csv"
 
@@ -131,7 +143,7 @@ def auto_main():
         verify = True
 
     if len(sys.argv) != 3:
-        print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie [--no-headless]")
+        print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie [--no-headless] [--no-verify]")
     else:
         csv_file = sys.argv[1]
         output_folder = sys.argv[2]
