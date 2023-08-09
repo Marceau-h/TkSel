@@ -39,6 +39,7 @@ def main(
         *args,
         headless: bool = True,
         verify: bool = False,
+        skip: bool = True,
         **kwargs
 ):
     df = pd.read_csv(csv).fillna("")
@@ -58,7 +59,8 @@ def main(
         'Accept-Encoding': 'gzip, deflate, sdch',
         'Accept-Language': 'en-US,en;q=0.8',
         'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 '
+                      'Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Cache-Control': 'max-age=0',
         'Connection': 'keep-alive',
@@ -67,6 +69,9 @@ def main(
 
     options = COptions()
 
+    options.add_argument("--no-sandbox")
+    options.add_argument("--start-maximized")
+
     if headless:
         options.add_argument("--headless=new")
         options.add_argument("--mute-audio")
@@ -74,9 +79,18 @@ def main(
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
     with webdriver.Chrome(options=options) as driver:
+        driver.get("https://www.tiktok.com/")
+
         wait = WebDriverWait(driver, 240)
 
-        for i, auth in tqdm(zip(id_, author), total=len(id_)):
+        pbar = tqdm(zip(id_, author), total=len(id_))
+
+        for i, auth in pbar:
+            pbar.set_description(f"Video_id = {i}, author = {auth}")
+
+            file = folder / f"{i}.mp4"
+            if file.exists() and skip:
+                continue
 
             url = f"https://www.tiktok.com/@{auth}/video/{i}"
 
@@ -84,17 +98,11 @@ def main(
 
             sleep(10)
 
-            # video = wait.until(
-            #     EC.presence_of_element_located(
-            #         (By.XPATH, '/html/body/div[1]/div[2]/div[2]/div/div[2]/div/div[1]/div[1]/div[2]/div/div/div/video')
-            #     )
-            # ).get_attribute("src")
-
-            # video = wait.until(
-            #     EC.presence_of_element_located(
-            #         (By.XPATH, '/html/body/div[1]/div[2]/div[2]/div/div[2]/div[1]/div[1]/div[1]/div[3]/div/div/div/video')
-            #     )
-            # ).get_attribute("src")
+            try:
+                driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
+                continue
+            except:
+                pass
 
             video = wait.until(
                 EC.presence_of_element_located(
@@ -110,7 +118,7 @@ def main(
             # response = s.get(video, stream=True, headers=headers, allow_redirects=True, verify=False)
             response = do_request(s, video, headers, verify=verify)
 
-            with open(folder / f"{i}.mp4", mode='wb') as f:
+            with file.open(mode='wb') as f:
                 f.write(response.content)
 
             dodo()
@@ -142,8 +150,15 @@ def auto_main():
     else:
         verify = True
 
+    if "--no-skip" in sys.argv:
+        skip = False
+        sys.argv.remove("--no-skip")
+    else:
+        skip = True
+
     if len(sys.argv) != 3:
-        print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie [--no-headless] [--no-verify]")
+        print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie "
+              "[--no-headless] [--no-verify] [--no-skip]")
     else:
         csv_file = sys.argv[1]
         output_folder = sys.argv[2]
@@ -156,7 +171,7 @@ def auto_main():
         assert csv_file.suffix == ".csv", f"{csv_file.name} n'est pas un fichier csv"
         assert not output_folder.is_file(), f"{output_folder.as_posix()} est un fichier, pas un dossier"
 
-        main(csv_file, output_folder, headless=headless, verify=verify)
+        main(csv_file, output_folder, headless=headless, verify=verify, skip=skip)
 
 
 if __name__ == "__main__":
