@@ -34,6 +34,8 @@ dependencies = [
     "pandas",
     "selenium",
     "tqdm",
+    "chromedriver-autoinstaller-fix",
+    "packaging"
 ]
 
 [project.urls]

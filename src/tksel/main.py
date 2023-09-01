@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options as COptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from chromedriver_autoinstaller_fix import install as install_chrome
 
 import requests
 
@@ -32,6 +33,16 @@ def do_request(session, url, headers, verify: bool = False):
     response.raise_for_status()
     return response
 
+def autoinstall():
+    """ Installe automatiquement le driver chrome en fonction de la version de chrome installée
+    sur l'ordinateur.
+    Fonction séparée pour pouvoir ignorer les warnings liés à l'installation du driver"""
+    warnings.filterwarnings("ignore")
+    warnings.simplefilter("ignore")
+
+    install_chrome()
+
+
 
 def main(
         csv: str | Path,
@@ -42,6 +53,8 @@ def main(
         skip: bool = True,
         **kwargs
 ):
+    autoinstall()
+
     df = pd.read_csv(csv).fillna("")
     try:
         id_ = df["id"].tolist()
