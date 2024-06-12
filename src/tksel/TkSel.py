@@ -3,6 +3,8 @@ from pathlib import Path
 from random import randint
 from time import sleep
 from typing import Optional, Tuple, Union
+from enum import Enum
+from datetime import datetime
 
 from chromedriver_autoinstaller_fix import install as install_chrome
 from requests import Session
@@ -13,6 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 import polars as pl
+
 
 def factory_dodo(a: int = 45, b: int = 70):
     """Factory method to generate a dodo function with a custom sleep range"""
@@ -47,6 +50,11 @@ def autoinstall():
     install_chrome()
 
 
+class Mode(Enum):
+    BYTES = "bytes"
+    FILE = "file"
+
+
 class TkSel:
     headers = {
         'Accept-Encoding': 'gzip, deflate, sdch',
@@ -57,6 +65,7 @@ class TkSel:
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Cache-Control': 'max-age=0', 'Connection': 'keep-alive', 'referer': 'https://www.tiktok.com/'
     }
+
     def __del__(self):
         if self.driver is not None:
             self.driver.quit()
@@ -90,9 +99,10 @@ class TkSel:
             csv: Optional[Union[str, Path]] = None,
             pedro: bool = False,
             **kwargs
-    ):
+    ) -> None:
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
+        self.df: pl.DataFrame = pl.DataFrame(schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime})
 
         self.pedro: bool = pedro
         if self.pedro:
@@ -121,12 +131,14 @@ class TkSel:
 
         if self.folder is not None:
             self.folder.mkdir(exist_ok=True, parents=True)
+            self.meta_path = folder / "meta.csv"
+        else:
+            self.meta_path = None
 
         if csv is not None:
             self.csv = Path(csv)
             if not self.csv.exists():
                 raise FileNotFoundError(f"File {self.csv} not found")
-            self.meta_path = folder / "meta.csv"
             self.read_csv()
         else:
             self.csv = None
@@ -134,7 +146,7 @@ class TkSel:
 
         self.make_driver()
 
-    def pedro_music(self):
+    def pedro_music(self) -> None:
         """Pedro, pedro, pedro-pe, praticamente il meglio di Santa Fe"""
         import vlc
         while True:
@@ -143,12 +155,31 @@ class TkSel:
             sleep(145)
             player.stop()
 
-    def read_csv(self):
-        df = pl.read_csv
+    def read_csv(self) -> pl.DataFrame:
+        """Lit le fichier CSV et renvoie un DataFrame Polars"""
+        with pl.Config(auto_structify=True):
+            self.df = pl.read_csv(self.csv).fill_nan("")
+            if "id" in self.df.columns:
+                self.df = self.df.rename({"id": "video_id"})
+            if "author_unique_id" in self.df.columns:
+                self.df = self.df.rename({"author_unique_id": "author_id"})
+            if "collect_timestamp" not in self.df.columns:
+                self.df = self.df.with_columns(pl.Series("collect_timestamp", [datetime.fromtimestamp(0)] * len(self.df)))
+            return self.df.select(["video_id", "author_id", "collect_timestamp"])
 
+    def write_csv(self, df: pl.DataFrame) -> None:
+        """Écrit le DataFrame dans un fichier CSV à coté des vidéos (si un dossier de sortie a été spécifié)"""
+        if self.meta_path is None:
+            raise ValueError("No folder specified")
 
+        if self.meta_path.exists():
+            old_df = pl.read_csv(self.meta_path)
+            df = old_df.vstack(df)
 
-    def make_driver(self):
+        df.write_csv(self.meta_path)
+
+    def make_driver(self) -> webdriver.Chrome:
+        """Initialise le driver Chrome et ouvre la page TikTok"""
         options = COptions()
         options.add_argument("--no-sandbox")
         options.add_argument("--start-maximized")
@@ -165,7 +196,9 @@ class TkSel:
 
         self.wait = WebDriverWait(self.driver, 240)
 
-    def get_video_bytes(self, author_id: str, video_id: str, dodo: bool = False) -> bytes:
+        return self.driver
+
+    def get_video_bytes(self, author_id: str, video_id: str, dodo: bool = False) -> Tuple[bytes, Tuple[str, str]]:
         """Récupère le contenu d'une vidéo TikTok en bytes"""
         url = f"https://www.tiktok.com/@{author_id}/video/{video_id}"
 
@@ -176,7 +209,7 @@ class TkSel:
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
             print("Not a video (carousel)")
-            return b""
+            return b"", (author_id, video_id, datetime.now())
         except NoSuchElementException:
             pass
 
@@ -193,14 +226,101 @@ class TkSel:
 
         response = do_request(s, video, self.headers, verify=self.verify)
 
+        # self.df.vstack(pl.DataFrame(
+        #     {"author_id": [author_id], "video_id": [video_id], "collect_timestamp": [datetime.now()]}), in_place=True)
+
+        tup = (author_id, video_id, datetime.now())
+
+        self.df.row(len(self.df)) = tup
+
         if dodo:
             self.dodo()
 
-        return response.content
+        return response.content, tup
+
+    def get_video_file(self, author_id: str, video_id: str, dodo: bool = False,
+                       file: Optional[Union[str, Path]] = None) -> Tuple[Path, Tuple[str, str]]:
+        """Récupère le contenu d'une vidéo TikTok et l'enregistre dans un fichier"""
+
+        if isinstance(file, str):
+            file = Path(file)
+        elif file is None and self.folder is not None:
+            file = self.folder / f"{video_id}.mp4"
+        elif isinstance(file, Path):
+            pass
+        else:
+            raise TypeError("file must be a string or a Path object or a folder must be specified")
+
+        if file.exists() and self.skip:
+            return file, (author_id, video_id, datetime.now())
+
+        content, tup = self.get_video_bytes(author_id, video_id, dodo)
+
+        with file.open(mode='wb') as f:
+            f.write(content)
+
+        return file, tup
+
+    def get_video(self, author_id: str, video_id: str, dodo: bool = False, mode: Mode = Mode.BYTES) -> Union[
+        bytes, Path]:
+        """Récupère le contenu d'une vidéo TikTok"""
+        func = self.get_video_bytes if mode == "bytes" else self.get_video_file
+        return func(author_id, video_id, dodo)
+
+    def get_videos(self, author_ids: list[str], video_ids: list[str], dodo: bool = False, mode: Mode = Mode.BYTES) -> \
+            list[Tuple[Union[bytes, Path], Tuple[str, str]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok"""
+        assert len(author_ids) == len(video_ids), "author_ids and video_ids must have the same length"
+
+        func = self.get_video_bytes if mode == "bytes" else self.get_video_file
+
+        data = []
+        for author_id, video_id in zip(author_ids, video_ids):
+            data.append(func(author_id, video_id, dodo))
+
+        return data
+
+    def get_videos_from_self(self, dodo: bool = False, mode: Mode = Mode.BYTES) -> list[
+        Tuple[Union[bytes, Path], Tuple[str, str]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
+        return self.get_videos(self.df["author_id"], self.df["video_id"], dodo, mode)
+
+    def get_videos_from_csv(self, csv: Union[str, Path], dodo: bool = False, mode: Mode = Mode.BYTES) -> list[
+        Tuple[Union[bytes, Path], Tuple[str, str]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
+        self.csv = Path(csv)
+        self.read_csv()
+
+        return self.get_videos_from_self()
+
+    def auto_main(self):
+        """Fonction principale pour télécharger les vidéos TikTok"""
+        if self.folder is None:
+            raise ValueError("No folder specified")
+
+        if self.meta_path is None:
+            raise ValueError("No meta file specified")
+
+        if self.csv is None:
+            raise ValueError("No CSV file specified")
+
+        self.get_videos_from_self(dodo=True, mode=Mode.FILE)
+
+        self.write_csv(self.df)
+
+        print(
+            f"Les vidéos ont été téléchargées et enregistrées dans {self.folder}, avec le fichier de métadonnées {self.meta_path}")
+
+        return self.df
+
+    def quit(self):
+        self.__del__()
 
 
 if __name__ == '__main__':
     autoinstall()
-    tksel = TkSel(pedro=True)
+    with TkSel(pedro=False, headless=False, folder="videos", csv="videos.csv", sleep_range=(10, 20)) as tksel:
+        tksel.auto_main()
+        sleep(10)
     sleep(10)
-    tksel.driver.quit()
+    print("Done")
