@@ -1,191 +1,61 @@
-import sys
-from random import randint
-from time import sleep
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options as COptions
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
-from chromedriver_autoinstaller_fix import install as install_chrome
-
-import requests
-
-import pandas as pd
-
+# SPDX-FileCopyrightText: 2023-present Marceau-h <106751184+Marceau-h@users.noreply.github.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+from argparse import ArgumentParser
 from pathlib import Path
 
-from tqdm.auto import tqdm
-import warnings
+from . import TkSel, __version__
 
 
-def dodo(a: int = 45, b: int = 70):
-    sleep(randint(a, b))
+def main() -> None:
+    parser = ArgumentParser(description="Télécharge les vidéos TikTok à partir d'un fichier csv")
 
+    parser.add_argument("csv", help="Le fichier csv contenant les ids des vidéos à télécharger", required=True)
+    parser.add_argument("output", help="Le dossier de sortie où les vidéos seront enregistrées", required=True)
 
-def do_request(session, url, headers, verify: bool = False):
-    """On sort les requêtes de la fonction principale pour pouvoir ignorer spécifiquement les warnings
-    liés aux certificats SSL (verify=False)
-    Demande une session requests.Session(), l'url et les headers en paramètres"""
+    parser.add_argument("--no-headless", action="store_true", help="Ouvre le navigateur en mode visible")
+    parser.add_argument("--no-verify", action="store_true", help="Ignore les erreurs de certificat SSL")
+    parser.add_argument("--no-skip", action="store_true", help="Ignore les vidéos déjà téléchargées")
+    parser.add_argument("--pedro", action="store_true", help="?")
 
-    warnings.filterwarnings("ignore")
-    response = session.get(url, stream=True, headers=headers, allow_redirects=True, verify=verify)
-    response.raise_for_status()
-    return response
+    parser.add_argument("--sleep-min", type=int, help="Temps d'attente minimum entre chaque téléchargement", default=45)
+    parser.add_argument("--sleep-max", type=int, help="Temps d'attente maximum entre chaque téléchargement", default=70)
 
-def autoinstall():
-    """ Installe automatiquement le driver chrome en fonction de la version de chrome installée
-    sur l'ordinateur.
-    Fonction séparée pour pouvoir ignorer les warnings liés à l'installation du driver"""
-    warnings.filterwarnings("ignore")
-    warnings.simplefilter("ignore")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
-    install_chrome()
+    args = parser.parse_args()
 
-
-
-def main(
-        csv: str | Path,
-        output: str | Path,
-        *args,
-        headless: bool = True,
-        verify: bool = False,
-        skip: bool = True,
-        **kwargs
-):
-    autoinstall()
-
-    df = pd.read_csv(csv).fillna("")
+    csv = args.csv
     try:
-        id_ = df["id"].tolist()
-    except KeyError:
-        id_ = df["video_id"].tolist()
+        csv = Path(csv)
+        assert csv.is_file() and csv.exists()
+    except AssertionError:
+        print(f"Le fichier csv {csv} n'existe pas ou n'est pas un fichier valide")
+        exit(1)
+    except Exception as e:
+        print(f"Erreur inattendue: {e} pour le fichier csv {csv}")
+        exit(1)
+
+    output = args.output
     try:
-        author = df["author_unique_id"].tolist()
-    except KeyError:
-        author = df["author_id"].tolist()
+        output = Path(output)
+        assert not output.is_file()
+    except AssertionError:
+        print(f"Le dossier de sortie {output} est un fichier, veuillez spécifier un dossier valide")
+        exit(1)
+    except Exception as e:
+        print(f"Erreur inattendue: {e} pour le dossier de sortie {output}")
+        exit(1)
 
-    folder = Path(output)
-    folder.mkdir(exist_ok=True, parents=True)
+    TkSel.from_csv(
+        args.csv,
+        output,
+        headless=not args.no_headless,
+        verify=not args.no_verify,
+        skip=not args.no_skip,
+        sleep_range=(args.sleep_min, args.sleep_max),
+        pedro=args.pedro
+    )
 
-    headers = {
-        'Accept-Encoding': 'gzip, deflate, sdch',
-        'Accept-Language': 'en-US,en;q=0.8',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 '
-                      'Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Cache-Control': 'max-age=0',
-        'Connection': 'keep-alive',
-        'referer': 'https://www.tiktok.com/'
-    }
-
-    options = COptions()
-
-    options.add_argument("--no-sandbox")
-    options.add_argument("--start-maximized")
-
-    if headless:
-        options.add_argument("--headless=new")
-        options.add_argument("--mute-audio")
-
-    options.add_experimental_option('excludeSwitches', ['enable-logging'])
-
-    with webdriver.Chrome(options=options) as driver:
-        driver.get("https://www.tiktok.com/")
-
-        wait = WebDriverWait(driver, 240)
-
-        pbar = tqdm(zip(id_, author), total=len(id_))
-
-        for i, auth in pbar:
-            pbar.set_description(f"Video_id = {i}, author = {auth}")
-
-            file = folder / f"{i}.mp4"
-            if file.exists() and skip:
-                continue
-
-            url = f"https://www.tiktok.com/@{auth}/video/{i}"
-
-            driver.get(url)
-
-            sleep(10)
-
-            try:
-                driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
-                continue
-            except:
-                pass
-
-            video = wait.until(
-                EC.presence_of_element_located(
-                    (By.XPATH, '//video')
-                )
-            ).get_attribute("src")
-
-            cookies = driver.get_cookies()
-            s = requests.Session()
-            for cookie in cookies:
-                s.cookies.set(cookie['name'], cookie['value'])
-
-            # response = s.get(video, stream=True, headers=headers, allow_redirects=True, verify=False)
-            response = do_request(s, video, headers, verify=verify)
-
-            with file.open(mode='wb') as f:
-                f.write(response.content)
-
-            dodo()
-
-    meta_path = folder / "meta.csv"
-
-    if meta_path.exists():
-        df_old = pd.read_csv(meta_path).fillna("")
-        df_old.update(df)
-        df = df_old
-
-    df.to_csv(meta_path, index=False)
-
-    print(f"Les vidéos ont été téléchargées et enregistrées dans {folder}, avec le fichier de métadonnées {meta_path}")
-
-    return df
-
-
-def auto_main():
-    if "--no-headless" in sys.argv:
-        headless = False
-        sys.argv.remove("--no-headless")
-    else:
-        headless = True
-
-    if "--no-verify" in sys.argv:
-        verify = False
-        sys.argv.remove("--no-verify")
-    else:
-        verify = True
-
-    if "--no-skip" in sys.argv:
-        skip = False
-        sys.argv.remove("--no-skip")
-    else:
-        skip = True
-
-    if len(sys.argv) != 3:
-        print(f"Usage: python {Path(__file__).name} fichier.csv dossier_de_sortie "
-              "[--no-headless] [--no-verify] [--no-skip]")
-    else:
-        csv_file = sys.argv[1]
-        output_folder = sys.argv[2]
-
-        csv_file = Path(csv_file)
-        output_folder = Path(output_folder)
-
-        assert csv_file.exists(), f"Le fichier {csv_file.name} n'existe pas"
-        assert csv_file.is_file(), f"{csv_file.name} est un dossier, pas un fichier"
-        assert csv_file.suffix == ".csv", f"{csv_file.name} n'est pas un fichier csv"
-        assert not output_folder.is_file(), f"{output_folder.as_posix()} est un fichier, pas un dossier"
-
-        main(csv_file, output_folder, headless=headless, verify=verify, skip=skip)
-
-
-if __name__ == "__main__":
-    auto_main()
+    print("Téléchargement terminé")
+    exit(0)

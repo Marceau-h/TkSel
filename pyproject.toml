@@ -168,4 +168,4 @@ exclude_lines = [
   "if TYPE_CHECKING:",
 ]
 [project.scripts]
-tksel = "tksel.main:auto_main"
+tksel = "tksel.main:main"

@@ -159,7 +159,7 @@ class TkSel:
         """Pedro, pedro, pedro-pe, praticamente il meglio di Santa Fe"""
         import vlc
         while True:
-            player = vlc.MediaPlayer("pedro.mp3")
+            player = vlc.MediaPlayer(Path(__file__).parent / "pedro.mp3")
             player.play()
             sleep(145)
             player.stop()
@@ -410,6 +410,19 @@ class TkSel:
     def quit(self) -> None:
         self.__del__()
 
+    @classmethod
+    def from_csv(
+            cls,
+            csv: Union[str, Path],
+            folder: Union[str, Path],
+            headless: bool = True,
+            verify: bool = True,
+            skip: bool = True,
+            sleep_range: Optional[Tuple[int, int]] = None,
+            pedro: bool = False
+    ) -> list[dict[str, str, datetime | None]]:
+        with cls(csv=csv, folder=folder, headless=headless, verify=verify, skip=skip, sleep_range=sleep_range, pedro=pedro) as tksel:
+            return tksel.auto_main()
 
 if __name__ == '__main__':
     autoinstall()
