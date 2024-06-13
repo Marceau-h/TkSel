@@ -320,6 +320,9 @@ class TkSel:
 
         content, tup = self.get_video_bytes(author_id, video_id, dodo)
 
+        if not content:
+            return Path(), tup
+
         with file.open(mode='wb') as f:
             f.write(content)
 
