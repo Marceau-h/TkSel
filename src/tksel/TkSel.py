@@ -1,20 +1,24 @@
+# SPDX-FileCopyrightText: 2023-present Marceau-h <106751184+Marceau-h@users.noreply.github.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 import warnings
+from enum import Enum
+from time import sleep
 from pathlib import Path
 from random import randint
-from time import sleep
-from typing import Optional, Tuple, Union
-from enum import Enum
 from datetime import datetime
+from typing import Optional, Tuple, Union, List, Generator, Dict, Any
 
-from chromedriver_autoinstaller_fix import install as install_chrome
+import polars as pl
 from requests import Session
+from requests.exceptions import ChunkedEncodingError
 from selenium import webdriver
 from selenium.common import NoSuchElementException
-from selenium.webdriver.chrome.options import Options as COptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-import polars as pl
+from selenium.webdriver.chrome.options import Options as COptions
+from chromedriver_autoinstaller_fix import install as install_chrome
 
 
 def factory_dodo(a: int = 45, b: int = 70):
@@ -29,7 +33,12 @@ def factory_dodo(a: int = 45, b: int = 70):
     return dodo
 
 
-def do_request(session, url, headers, verify: bool = False):
+def do_request(
+        session: Session,
+        url: str,
+        headers: Dict[str, str],
+        verify: bool = False
+):
     """On sort les requêtes de la fonction principale pour pouvoir ignorer spécifiquement les warnings
     liés aux certificats SSL (verify=False)
     Demande une session requests.Session(), l'url et les headers en paramètres"""
@@ -66,25 +75,23 @@ class TkSel:
         'Cache-Control': 'max-age=0', 'Connection': 'keep-alive', 'referer': 'https://www.tiktok.com/'
     }
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.driver is not None:
             self.driver.quit()
 
         if self.pedro:
             self.pedro_process.terminate()
-            self.pedro_process.join()
-            self.pedro_process.close()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.__del__()
 
-    def __enter__(self):
+    def __enter__(self) -> "TkSel":
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<TkSel object at {id(self)}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<TkSel object at {id(self)}>"
 
     def __init__(
@@ -100,9 +107,11 @@ class TkSel:
             pedro: bool = False,
             **kwargs
     ) -> None:
+        self.to_collect = set()
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
-        self.df: pl.DataFrame = pl.DataFrame(schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime})
+        self.videos: List[Dict[str, str, Optional[datetime]]] = []
+
 
         self.pedro: bool = pedro
         if self.pedro:
@@ -155,26 +164,63 @@ class TkSel:
             sleep(145)
             player.stop()
 
-    def read_csv(self) -> pl.DataFrame:
+
+    def read_csv(self) -> dict[Any, dict[str, Any]]:
         """Lit le fichier CSV et renvoie un DataFrame Polars"""
         with pl.Config(auto_structify=True):
-            self.df = pl.read_csv(self.csv).fill_nan("")
-            if "id" in self.df.columns:
-                self.df = self.df.rename({"id": "video_id"})
-            if "author_unique_id" in self.df.columns:
-                self.df = self.df.rename({"author_unique_id": "author_id"})
-            if "collect_timestamp" not in self.df.columns:
-                self.df = self.df.with_columns(pl.Series("collect_timestamp", [datetime.fromtimestamp(0)] * len(self.df)))
-            return self.df.select(["video_id", "author_id", "collect_timestamp"])
+            df = pl.read_csv(self.csv).fill_nan("")
+            if "id" in df.columns and "video_id" not in df.columns:
+                df = df.rename({"id": "video_id"})
+            if "author_unique_id" in df.columns:
+                if "author_id" in df.columns:
+                    df.drop_in_place("author_id")
+                df = df.rename({"author_unique_id": "author_id"})
+            if "collect_timestamp" in df.columns:
+                timestamps = df["collect_timestamp"].to_list()
+            else:
+                timestamps = [None] * len(df)
 
-    def write_csv(self, df: pl.DataFrame) -> None:
+            ids = df["video_id"].to_list()
+            authors = df["author_id"].to_list()
+
+            self.to_collect = {
+                (id_, author)
+                for id_, author in zip(ids, authors)
+            }
+
+            self.videos = [
+                {"video_id": id_, "author_id": author, "collect_timestamp": timestamp}
+                for id_, author, timestamp in zip(ids, authors, timestamps)
+            ]
+
+            if self.meta_path is not None and self.meta_path.exists():
+                old_df = pl.read_csv(
+                    self.meta_path,
+                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime}
+                )
+                old_df.filter(
+                    pl.col("collect_timestamp").is_not_null()
+                )
+                self.videos.extend(
+                    [
+                        {"video_id": id_, "author_id": author, "collect_timestamp": timestamp}
+                        for id_, author, timestamp in zip(old_df["video_id"], old_df["author_id"], old_df["collect_timestamp"])
+                    ]
+                )
+
+            return self.videos
+
+    def write_csv(self, df: Optional[pl.DataFrame] = None) -> None:
         """Écrit le DataFrame dans un fichier CSV à coté des vidéos (si un dossier de sortie a été spécifié)"""
         if self.meta_path is None:
             raise ValueError("No folder specified")
 
-        if self.meta_path.exists():
-            old_df = pl.read_csv(self.meta_path)
-            df = old_df.vstack(df)
+        if df is None:
+            with pl.Config(auto_structify=True):
+                df = pl.DataFrame(
+                    self.videos,
+                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime}
+                )
 
         df.write_csv(self.meta_path)
 
@@ -198,7 +244,12 @@ class TkSel:
 
         return self.driver
 
-    def get_video_bytes(self, author_id: str, video_id: str, dodo: bool = False) -> Tuple[bytes, Tuple[str, str]]:
+    def get_video_bytes(
+            self,
+            author_id: str,
+            video_id: str,
+            dodo: bool = False
+    ) -> Tuple[bytes, Tuple[str, str, Optional[datetime]]]:
         """Récupère le contenu d'une vidéo TikTok en bytes"""
         url = f"https://www.tiktok.com/@{author_id}/video/{video_id}"
 
@@ -209,7 +260,14 @@ class TkSel:
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
             print("Not a video (carousel)")
-            return b"", (author_id, video_id, datetime.now())
+            return b"", (author_id, video_id, None)
+        except NoSuchElementException:
+            pass
+
+        try:
+            self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivErrorContainer']")
+            print("Can't find video (removed, private, etc.)")
+            return b"", (author_id, video_id, None)
         except NoSuchElementException:
             pass
 
@@ -224,22 +282,28 @@ class TkSel:
         for cookie in cookies:
             s.cookies.set(cookie['name'], cookie['value'])
 
-        response = do_request(s, video, self.headers, verify=self.verify)
+        try:
+            response = do_request(s, video, self.headers, verify=self.verify)
+            content = response.content
+        except ChunkedEncodingError as e:
+            print(f"Error with video {video_id} from {author_id}")
+            print(e)
+            return b"", (author_id, video_id, None)
 
-        # self.df.vstack(pl.DataFrame(
-        #     {"author_id": [author_id], "video_id": [video_id], "collect_timestamp": [datetime.now()]}), in_place=True)
-
-        tup = (author_id, video_id, datetime.now())
-
-        self.df.row(len(self.df)) = tup
+        self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
 
         if dodo:
             self.dodo()
 
-        return response.content, tup
+        return content, (author_id, video_id, datetime.now())
 
-    def get_video_file(self, author_id: str, video_id: str, dodo: bool = False,
-                       file: Optional[Union[str, Path]] = None) -> Tuple[Path, Tuple[str, str]]:
+    def get_video_file(
+            self,
+            author_id: str,
+            video_id: str,
+            dodo: bool = False,
+            file: Optional[Union[str, Path]] = None
+    ) -> Tuple[Path, Tuple[str, str, datetime]]:
         """Récupère le contenu d'une vidéo TikTok et l'enregistre dans un fichier"""
 
         if isinstance(file, str):
@@ -261,14 +325,24 @@ class TkSel:
 
         return file, tup
 
-    def get_video(self, author_id: str, video_id: str, dodo: bool = False, mode: Mode = Mode.BYTES) -> Union[
-        bytes, Path]:
+    def get_video(
+            self,
+            author_id: str,
+            video_id: str,
+            dodo: bool = False,
+            mode: Mode = Mode.BYTES
+    ) -> tuple[Union[bytes, Path], tuple[str, str, datetime]]:
         """Récupère le contenu d'une vidéo TikTok"""
         func = self.get_video_bytes if mode == "bytes" else self.get_video_file
         return func(author_id, video_id, dodo)
 
-    def get_videos(self, author_ids: list[str], video_ids: list[str], dodo: bool = False, mode: Mode = Mode.BYTES) -> \
-            list[Tuple[Union[bytes, Path], Tuple[str, str]]]:
+    def get_videos(
+            self,
+            author_ids: list[str],
+            video_ids: list[str],
+            dodo: bool = False,
+            mode: Mode = Mode.BYTES
+    ) -> list[Tuple[Union[bytes, Path], Tuple[str, str, datetime]]]:
         """Récupère le contenu de plusieurs vidéos TikTok"""
         assert len(author_ids) == len(video_ids), "author_ids and video_ids must have the same length"
 
@@ -280,20 +354,38 @@ class TkSel:
 
         return data
 
-    def get_videos_from_self(self, dodo: bool = False, mode: Mode = Mode.BYTES) -> list[
-        Tuple[Union[bytes, Path], Tuple[str, str]]]:
-        """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
-        return self.get_videos(self.df["author_id"], self.df["video_id"], dodo, mode)
+    def get_videos_from_self(
+            self,
+            dodo: bool = False,
+            mode: Mode = Mode.BYTES
+    ) -> list[Tuple[Union[bytes, Path], Tuple[str, str, datetime]]]:
+        self.to_collect = {
+            (video["video_id"], video["author_id"])
+            for idx, video in enumerate(self.videos)
+            if (video["video_id"], video["author_id"]) in self.to_collect
+            and (video["collect_timestamp"] is None or not self.skip)
+        }
+        v_ids, a_ids = zip(*self.to_collect)
+        return self.get_videos(
+            list(a_ids),
+            list(v_ids),
+            dodo,
+            mode
+        )
 
-    def get_videos_from_csv(self, csv: Union[str, Path], dodo: bool = False, mode: Mode = Mode.BYTES) -> list[
-        Tuple[Union[bytes, Path], Tuple[str, str]]]:
+    def get_videos_from_csv(
+            self,
+            csv: Union[str, Path],
+            dodo: bool = False,
+            mode: Mode = Mode.BYTES
+    ) -> List[tuple[Union[bytes, Path], tuple[str, str, datetime]]]:
         """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
         self.csv = Path(csv)
         self.read_csv()
 
-        return self.get_videos_from_self()
+        return self.get_videos_from_self(dodo, mode)
 
-    def auto_main(self):
+    def auto_main(self) -> list[dict[str, str, Optional[datetime]]]:
         """Fonction principale pour télécharger les vidéos TikTok"""
         if self.folder is None:
             raise ValueError("No folder specified")
@@ -306,20 +398,22 @@ class TkSel:
 
         self.get_videos_from_self(dodo=True, mode=Mode.FILE)
 
-        self.write_csv(self.df)
+        self.write_csv()
 
         print(
-            f"Les vidéos ont été téléchargées et enregistrées dans {self.folder}, avec le fichier de métadonnées {self.meta_path}")
+            f"Les vidéos ont été téléchargées et enregistrées dans {self.folder}, "
+            f"avec le fichier de métadonnées {self.meta_path}"
+        )
 
-        return self.df
+        return self.videos
 
-    def quit(self):
+    def quit(self) -> None:
         self.__del__()
 
 
 if __name__ == '__main__':
     autoinstall()
-    with TkSel(pedro=False, headless=False, folder="videos", csv="videos.csv", sleep_range=(10, 20)) as tksel:
+    with TkSel(pedro=True, headless=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
         tksel.auto_main()
         sleep(10)
     sleep(10)
