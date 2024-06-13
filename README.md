@@ -51,7 +51,7 @@ tksel input.csv output_folder [--no-headless] [--no-verify] [--no-skip]
 ### Example
 
 ```bash
-tksel temp.csv videos-collecte1 --no-headless --no-verify --no-skip --sleep-min 60 --sleep-max 120 
+tksel to_collect.csv /path/to/saving/dir --no-headless --no-verify --no-skip --sleep-min 60 --sleep-max 120 
 ```
 
 
