@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tksel"
+name = "TkSel"
 dynamic = ["version"]
 description = 'Scrapper for Minet csvs on tiktok'
 readme = "README.md"
@@ -11,10 +11,10 @@ requires-python = ">=3.7"
 license = "AGPL-3.0-or-later"
 keywords = ["minet", "TikTok", "tksel", "video"]
 authors = [
-    { name = "Marceau-h", email = "106751184+Marceau-h@users.noreply.github.com" },
+    { name = "Marceau-h", email = "pypi@marceau-h.fr" },
 ]
 maintainers = [
-    { name = "Marceau-h", email = "106751184+Marceau-h@users.noreply.github.com" },
+    { name = "Marceau-h", email = "pypi@marceau-h.fr" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -169,3 +169,11 @@ exclude_lines = [
 ]
 [project.scripts]
 tksel = "tksel.main:main"
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "*.csv",
+    "*.csv.*",
+    "*.mp4",
+    "/test",
+    "/videos"
+]
