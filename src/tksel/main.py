@@ -10,8 +10,8 @@ from . import TkSel, __version__
 def main() -> None:
     parser = ArgumentParser(description="Télécharge les vidéos TikTok à partir d'un fichier csv")
 
-    parser.add_argument("csv", help="Le fichier csv contenant les ids des vidéos à télécharger", required=True)
-    parser.add_argument("output", help="Le dossier de sortie où les vidéos seront enregistrées", required=True)
+    parser.add_argument("csv", help="Le fichier csv contenant les ids des vidéos à télécharger")
+    parser.add_argument("output", help="Le dossier de sortie où les vidéos seront enregistrées")
 
     parser.add_argument("--no-headless", action="store_true", help="Ouvre le navigateur en mode visible")
     parser.add_argument("--no-verify", action="store_true", help="Ignore les erreurs de certificat SSL")
