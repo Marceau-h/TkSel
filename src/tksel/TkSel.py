@@ -222,6 +222,10 @@ class TkSel:
                     schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime}
                 )
 
+        df.filter(
+            pl.col("collect_timestamp").is_not_null()
+        )
+
         df.write_csv(self.meta_path)
 
     def make_driver(self) -> webdriver.Chrome:
