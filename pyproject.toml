@@ -31,11 +31,12 @@ classifiers = [
 ]
 dependencies = [
     "requests",
-    "pandas",
+    "polars",
     "selenium",
     "tqdm",
     "chromedriver-autoinstaller-fix",
-    "packaging"
+    "packaging", 
+"python-vlc" 
 ]
 
 [project.urls]
