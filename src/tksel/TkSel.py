@@ -7,9 +7,10 @@ from time import sleep
 from pathlib import Path
 from random import randint
 from datetime import datetime
-from typing import Optional, Tuple, Union, List, Generator, Dict, Any
+from typing import Optional, Tuple, Union, List, Dict, Any
 
 import polars as pl
+from tqdm.auto import tqdm
 from requests import Session
 from requests.exceptions import ChunkedEncodingError
 from selenium import webdriver
@@ -104,6 +105,7 @@ class TkSel:
             sleep_range: Optional[Tuple[int, int]] = None,
             folder: Optional[Union[str, Path]] = None,
             csv: Optional[Union[str, Path]] = None,
+            tqdm: bool = True,
             pedro: bool = False,
             **kwargs
     ) -> None:
@@ -111,7 +113,6 @@ class TkSel:
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
         self.videos: List[Dict[str, str, Optional[datetime]]] = []
-
 
         self.pedro: bool = pedro
         if self.pedro:
@@ -123,6 +124,7 @@ class TkSel:
         self.headless: bool = headless
         self.verify: bool = verify
         self.skip: bool = skip
+        self.tqdm: bool = tqdm
 
         if sleep_range is not None:
             self.dodo = factory_dodo(*sleep_range)
@@ -164,7 +166,6 @@ class TkSel:
             sleep(145)
             player.stop()
 
-
     def read_csv(self) -> dict[Any, dict[str, Any]]:
         """Lit le fichier CSV et renvoie un DataFrame Polars"""
         with pl.Config(auto_structify=True):
@@ -204,7 +205,8 @@ class TkSel:
                 self.videos.extend(
                     [
                         {"video_id": id_, "author_id": author, "collect_timestamp": timestamp}
-                        for id_, author, timestamp in zip(old_df["video_id"], old_df["author_id"], old_df["collect_timestamp"])
+                        for id_, author, timestamp in
+                        zip(old_df["video_id"], old_df["author_id"], old_df["collect_timestamp"])
                     ]
                 )
 
@@ -355,9 +357,15 @@ class TkSel:
 
         func = self.get_video_bytes if mode == "bytes" else self.get_video_file
 
+        if self.tqdm:
+            it = tqdm(zip(author_ids, video_ids))
+        else:
+            it = zip(author_ids, video_ids)
+
+
         data = []
-        for author_id, video_id in zip(author_ids, video_ids):
-            data.append(func(author_id, video_id, dodo))
+        for author_id, video_id in it:
+            data.append(func(author_id, video_id, dodo=dodo))
 
         return data
 
@@ -370,7 +378,7 @@ class TkSel:
             (video["video_id"], video["author_id"])
             for idx, video in enumerate(self.videos)
             if (video["video_id"], video["author_id"]) in self.to_collect
-            and (video["collect_timestamp"] is None or not self.skip)
+               and (video["collect_timestamp"] is None or not self.skip)
         }
         v_ids, a_ids = zip(*self.to_collect)
         return self.get_videos(
@@ -428,8 +436,17 @@ class TkSel:
             sleep_range: Optional[Tuple[int, int]] = None,
             pedro: bool = False
     ) -> list[dict[str, str, datetime | None]]:
-        with cls(csv=csv, folder=folder, headless=headless, verify=verify, skip=skip, sleep_range=sleep_range, pedro=pedro) as tksel:
+        with cls(
+                csv=csv,
+                folder=folder,
+                headless=headless,
+                verify=verify,
+                skip=skip,
+                sleep_range=sleep_range,
+                pedro=pedro,
+        ) as tksel:
             return tksel.auto_main()
+
 
 if __name__ == '__main__':
     autoinstall()

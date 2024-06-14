@@ -30,13 +30,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "requests",
     "polars",
-    "selenium",
     "tqdm",
+    "requests",
+    "selenium",
     "chromedriver-autoinstaller-fix",
-    "packaging", 
-"python-vlc" 
+    "python-vlc"
 ]
 
 [project.urls]
