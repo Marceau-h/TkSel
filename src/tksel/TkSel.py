@@ -435,7 +435,7 @@ class TkSel:
             skip: bool = True,
             sleep_range: Optional[Tuple[int, int]] = None,
             pedro: bool = False
-    ) -> list[dict[str, str, datetime | None]]:
+    ) -> list[dict[str, str, Optional[datetime]]]:
         with cls(
                 csv=csv,
                 folder=folder,
