@@ -1,3 +1,8 @@
 /dist/
 /venv/
 /.idea/
+*.csv
+*.csv.*
+*.mp4
+/test
+/videos
