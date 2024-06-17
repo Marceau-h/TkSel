@@ -60,9 +60,13 @@ def autoinstall():
     install_chrome()
 
 
-class Mode(Enum):
-    BYTES = "bytes"
-    FILE = "file"
+class Status(Enum):
+    """Enum to represent the status of a video"""
+    SKIPPED = "SKIPPED"
+    OK = "OK"
+    ERROR = "ERROR"
+    NOT_FOUND = "NOT_FOUND"
+    NOT_VIDEO = "NOT_VIDEO"
 
 
 class TkSel:
@@ -112,7 +116,7 @@ class TkSel:
         self.to_collect = set()
         self.driver: Optional[webdriver.Chrome] = None
         self.wait: Optional[WebDriverWait] = None
-        self.videos: List[Dict[str, str, Optional[datetime]]] = []
+        self.videos: List[Dict[str, Union[str, Optional[datetime]]]] = []
 
         self.pedro: bool = pedro
         if self.pedro:
@@ -166,7 +170,7 @@ class TkSel:
             sleep(145)
             player.stop()
 
-    def read_csv(self) -> dict[Any, dict[str, Any]]:
+    def read_csv(self) -> list[dict[str, Any]]:
         """Lit le fichier CSV et renvoie un DataFrame Polars"""
         with pl.Config(auto_structify=True):
             df = pl.read_csv(self.csv).fill_nan("")
@@ -255,7 +259,7 @@ class TkSel:
             author_id: str,
             video_id: str,
             dodo: bool = False
-    ) -> Tuple[bytes, Tuple[str, str, Optional[datetime]]]:
+    ) -> Tuple[bytes, Tuple[str, str, Optional[datetime], Status]]:
         """Récupère le contenu d'une vidéo TikTok en bytes"""
         url = f"https://www.tiktok.com/@{author_id}/video/{video_id}"
 
@@ -266,14 +270,14 @@ class TkSel:
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
             print("Not a video (carousel)")
-            return b"", (author_id, video_id, None)
+            return b"", (author_id, video_id, None, Status.NOT_VIDEO)
         except NoSuchElementException:
             pass
 
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivErrorContainer']")
             print("Can't find video (removed, private, etc.)")
-            return b"", (author_id, video_id, None)
+            return b"", (author_id, video_id, None, Status.NOT_FOUND)
         except NoSuchElementException:
             pass
 
@@ -294,22 +298,22 @@ class TkSel:
         except ChunkedEncodingError as e:
             print(f"Error with video {video_id} from {author_id}")
             print(e)
-            return b"", (author_id, video_id, None)
+            return b"", (author_id, video_id, None, Status.ERROR)
 
         self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
 
         if dodo:
             self.dodo()
 
-        return content, (author_id, video_id, datetime.now())
+        return content, (author_id, video_id, datetime.now(), Status.OK)
 
     def get_video_file(
             self,
             author_id: str,
             video_id: str,
+            file: Optional[Union[str, Path]] = None,
             dodo: bool = False,
-            file: Optional[Union[str, Path]] = None
-    ) -> Tuple[Path, Tuple[str, str, datetime]]:
+    ) -> Tuple[Path, Tuple[str, str, Optional[datetime], Status]]:
         """Récupère le contenu d'une vidéo TikTok et l'enregistre dans un fichier"""
 
         if isinstance(file, str):
@@ -322,7 +326,7 @@ class TkSel:
             raise TypeError("file must be a string or a Path object or a folder must be specified")
 
         if file.exists() and self.skip:
-            return file, (author_id, video_id, datetime.now())
+            return file, (author_id, video_id, datetime.now(), Status.SKIPPED)
 
         content, tup = self.get_video_bytes(author_id, video_id, dodo)
 
@@ -334,46 +338,74 @@ class TkSel:
 
         return file, tup
 
-    def get_video(
-            self,
-            author_id: str,
-            video_id: str,
-            dodo: bool = False,
-            mode: Mode = Mode.BYTES
-    ) -> tuple[Union[bytes, Path], tuple[str, str, datetime]]:
-        """Récupère le contenu d'une vidéo TikTok"""
-        func = self.get_video_bytes if mode == "bytes" else self.get_video_file
-        return func(author_id, video_id, dodo)
-
-    def get_videos(
+    def get_videos_bytes(
             self,
             author_ids: list[str],
             video_ids: list[str],
-            dodo: bool = False,
-            mode: Mode = Mode.BYTES
-    ) -> list[Tuple[Union[bytes, Path], Tuple[str, str, datetime]]]:
-        """Récupère le contenu de plusieurs vidéos TikTok"""
+            dodo: bool = False
+    ) -> List[Tuple[bytes, Tuple[str, str, Optional[datetime], Status]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok en bytes"""
         assert len(author_ids) == len(video_ids), "author_ids and video_ids must have the same length"
 
-        func = self.get_video_bytes if mode == "bytes" else self.get_video_file
-
         if self.tqdm:
-            it = tqdm(zip(author_ids, video_ids))
+            it = tqdm(zip(author_ids, video_ids), total=len(author_ids))
         else:
             it = zip(author_ids, video_ids)
 
+        return [
+            self.get_video_bytes(author_id, video_id, dodo)
+            for author_id, video_id in it
+        ]
 
-        data = []
-        for author_id, video_id in it:
-            data.append(func(author_id, video_id, dodo=dodo))
 
-        return data
+    def get_videos_files(
+            self,
+            author_ids: list[str],
+            video_ids: list[str],
+            files_or_folder: Union[Optional[Union[str, Path]], Optional[list[Union[str, Path]]]] = None,
+            dodo: bool = False
+    ) -> List[Tuple[Path, Tuple[str, str, Optional[datetime], Status]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok et les enregistre dans des fichiers"""
+        assert len(author_ids) == len(video_ids), "author_ids and video_ids must have the same length"
 
-    def get_videos_from_self(
+        if files_or_folder is not None:
+            if isinstance(files_or_folder, (str, Path)):
+                if isinstance(files_or_folder, str):
+                    files_or_folder = Path(files_or_folder)
+                assert files_or_folder.is_dir(), "folder must be a directory"
+                if not files_or_folder.exists():
+                    files_or_folder.mkdir(parents=True)
+
+                files_or_folder = [
+                    files_or_folder / f"{author_id}_{video_id}.mp4"
+                    for author_id, video_id in zip(author_ids, video_ids)
+                ]
+            elif isinstance(files_or_folder, list):
+                if len(files_or_folder) != len(author_ids):
+                    raise ValueError("author_ids , video_ids and files must have the same length")
+                if not all(isinstance(file, (str, Path)) for file in files_or_folder):
+                    raise TypeError("files must be a string, a Path object or a list of strings or Path objects")
+                files_or_folder = [Path(file) for file in files_or_folder]
+            else:
+                raise TypeError("files must be a string, a Path object or a list of strings or Path objects")
+        else:
+            files_or_folder = [None] * len(author_ids)
+
+        if self.tqdm:
+            it = tqdm(zip(author_ids, video_ids, files_or_folder), total=len(author_ids))
+        else:
+            it = zip(author_ids, video_ids, files_or_folder)
+
+        return [
+            self.get_video_file(author_id, video_id, file, dodo)
+            for author_id, video_id, file in it
+        ]
+
+
+    def get_videos_from_self_bytes(
             self,
             dodo: bool = False,
-            mode: Mode = Mode.BYTES
-    ) -> list[Tuple[Union[bytes, Path], Tuple[str, str, datetime]]]:
+    ) -> list[Tuple[Union[bytes, Path], Tuple[str, str, Optional[datetime], Status]]]:
         self.to_collect = {
             (video["video_id"], video["author_id"])
             for idx, video in enumerate(self.videos)
@@ -381,26 +413,52 @@ class TkSel:
                and (video["collect_timestamp"] is None or not self.skip)
         }
         v_ids, a_ids = zip(*self.to_collect)
-        return self.get_videos(
+        return self.get_videos_bytes(
             list(a_ids),
             list(v_ids),
             dodo,
-            mode
         )
 
-    def get_videos_from_csv(
+    def get_videos_from_self_files(
+            self,
+            dodo: bool = False,
+    ) -> list[Tuple[Path, Tuple[str, str, Optional[datetime], Status]]]:
+        self.to_collect = {
+            (video["video_id"], video["author_id"])
+            for idx, video in enumerate(self.videos)
+            if (video["video_id"], video["author_id"]) in self.to_collect
+               and (video["collect_timestamp"] is None or not self.skip)
+        }
+        v_ids, a_ids = zip(*self.to_collect)
+        return self.get_videos_files(
+            list(a_ids),
+            list(v_ids),
+            dodo=dodo
+        )
+
+    def get_videos_from_csv_bytes(
             self,
             csv: Union[str, Path],
             dodo: bool = False,
-            mode: Mode = Mode.BYTES
-    ) -> List[tuple[Union[bytes, Path], tuple[str, str, datetime]]]:
+    ) -> List[tuple[Union[bytes, Path], Tuple[str, str, Optional[datetime], Status]]]:
         """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
         self.csv = Path(csv)
         self.read_csv()
 
-        return self.get_videos_from_self(dodo, mode)
+        return self.get_videos_from_self_bytes(dodo=dodo)
 
-    def auto_main(self) -> list[dict[str, str, Optional[datetime]]]:
+    def get_videos_from_csv_files(
+            self,
+            csv: Union[str, Path],
+            dodo: bool = False,
+    ) -> List[tuple[Path, Tuple[str, str, Optional[datetime], Status]]]:
+        """Récupère le contenu de plusieurs vidéos TikTok à partir d'un fichier CSV"""
+        self.csv = Path(csv)
+        self.read_csv()
+
+        return self.get_videos_from_self_files(dodo=dodo)
+
+    def auto_main(self) -> list[dict[str, Union[str, Optional[datetime]]]]:
         """Fonction principale pour télécharger les vidéos TikTok"""
         if self.folder is None:
             raise ValueError("No folder specified")
@@ -411,7 +469,7 @@ class TkSel:
         if self.csv is None:
             raise ValueError("No CSV file specified")
 
-        self.get_videos_from_self(dodo=True, mode=Mode.FILE)
+        self.get_videos_from_self_files(dodo=True)
 
         self.write_csv()
 
@@ -435,7 +493,7 @@ class TkSel:
             skip: bool = True,
             sleep_range: Optional[Tuple[int, int]] = None,
             pedro: bool = False
-    ) -> list[dict[str, str, Optional[datetime]]]:
+    ) -> list[dict[str, Union[str, Optional[datetime]]]]:
         with cls(
                 csv=csv,
                 folder=folder,
@@ -450,7 +508,7 @@ class TkSel:
 
 if __name__ == '__main__':
     autoinstall()
-    with TkSel(pedro=True, headless=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
+    with TkSel(pedro=True, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
         tksel.auto_main()
         sleep(10)
     sleep(10)
