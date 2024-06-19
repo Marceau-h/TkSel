@@ -311,32 +311,30 @@ class TkSel:
             self,
             author_id: str,
             video_id: str,
-            file: Optional[Union[str, Path]] = None,
+            file_or_folder: Union[Optional[Union[str, Path]]] = None,
             dodo: bool = False,
     ) -> Tuple[Path, Tuple[str, str, Optional[datetime], Status]]:
         """Récupère le contenu d'une vidéo TikTok et l'enregistre dans un fichier"""
 
-        if isinstance(file, str):
-            file = Path(file)
-        elif file is None and self.folder is not None:
-            file = self.folder / f"{video_id}.mp4"
-        elif isinstance(file, Path):
-            pass
-        else:
-            raise TypeError("file must be a string or a Path object or a folder must be specified")
+        if file_or_folder is not None:
+            if isinstance(file_or_folder, (str, Path)):
+                if isinstance(file_or_folder, str):
+                    file_or_folder = Path(file_or_folder)
+                if file_or_folder.is_dir():
+                    file_or_folder = file_or_folder / f"{author_id}_{video_id}.mp4"
 
-        if file.exists() and self.skip:
-            return file, (author_id, video_id, datetime.now(), Status.SKIPPED)
+            else:
+                raise TypeError("file_or_folder must be a string or a Path object")
 
         content, tup = self.get_video_bytes(author_id, video_id, dodo)
 
         if not content:
             return Path(), tup
 
-        with file.open(mode='wb') as f:
+        with file_or_folder.open(mode='wb') as f:
             f.write(content)
 
-        return file, tup
+        return file_or_folder, tup
 
     def get_videos_bytes(
             self,
@@ -372,7 +370,7 @@ class TkSel:
             if isinstance(files_or_folder, (str, Path)):
                 if isinstance(files_or_folder, str):
                     files_or_folder = Path(files_or_folder)
-                assert files_or_folder.is_dir(), "folder must be a directory"
+                assert files_or_folder.is_dir(), "file_or_folder must be a directory if a single Path is given"
                 if not files_or_folder.exists():
                     files_or_folder.mkdir(parents=True)
 
@@ -400,7 +398,6 @@ class TkSel:
             self.get_video_file(author_id, video_id, file, dodo)
             for author_id, video_id, file in it
         ]
-
 
     def get_videos_from_self_bytes(
             self,
