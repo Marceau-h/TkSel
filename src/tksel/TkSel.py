@@ -320,7 +320,7 @@ class TkSel:
             if isinstance(file_or_folder, (str, Path)):
                 if isinstance(file_or_folder, str):
                     file_or_folder = Path(file_or_folder)
-                if file_or_folder.is_dir():
+                if file_or_folder.is_dir() or (not file_or_folder.suffix and not file_or_folder.exists()):
                     file_or_folder = file_or_folder / f"{author_id}_{video_id}.mp4"
 
             else:
