@@ -39,12 +39,12 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/Marceau-h/tksel#readme"
-Issues = "https://github.com/Marceau-h/tksel/issues"
-Source = "https://github.com/Marceau-h/tksel"
+Documentation = "https://github.com/Marceau-h/TkSel#readme"
+Issues = "https://github.com/Marceau-h/TkSel/issues"
+Source = "https://github.com/Marceau-h/TkSel"
 
 [tool.hatch.version]
-path = "src/tksel/__about__.py"
+path = "src/TkSel/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -74,7 +74,7 @@ dependencies = [
   "ruff>=0.0.243",
 ]
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:src/tksel tests}"
+typing = "mypy --install-types --non-interactive {args:src/TkSel tests}"
 style = [
   "ruff {args:.}",
   "black --check --diff {args:.}",
@@ -140,7 +140,7 @@ unfixable = [
 ]
 
 [tool.ruff.isort]
-known-first-party = ["tksel"]
+known-first-party = ["TkSel"]
 
 [tool.ruff.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -150,7 +150,7 @@ ban-relative-imports = "all"
 "tests/**/*" = ["PLR2004", "S101", "TID252"]
 
 [tool.coverage.run]
-source_pkgs = ["tksel", "tests"]
+source_pkgs = ["TkSel", "tests"]
 branch = true
 parallel = true
 omit = [
@@ -158,8 +158,8 @@ omit = [
 ]
 
 [tool.coverage.paths]
-tksel = ["src/tksel", "*/tksel/src/tksel"]
-tests = ["tests", "*/tksel/tests"]
+tksel = ["src/TkSel", "*/TkSel/src/TkSel"]
+tests = ["tests", "*/TkSel/tests"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -168,7 +168,7 @@ exclude_lines = [
   "if TYPE_CHECKING:",
 ]
 [project.scripts]
-tksel = "tksel.main:main"
+tksel = "TkSel.main:main"
 [tool.hatch.build.targets.sdist]
 exclude = [
     "*.csv",
