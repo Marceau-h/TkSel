@@ -63,7 +63,8 @@ def autoinstall():
 class Status(Enum):
     """Enum to represent the status of a video"""
     SKIPPED = "SKIPPED"
-    OK = "OK"
+    OK_CARROUSEL = "OK_CARROUSEL"
+    OK_VIDEO = "OK_VIDEO"
     ERROR = "ERROR"
     NOT_FOUND = "NOT_FOUND"
     NOT_VIDEO = "NOT_VIDEO"
@@ -259,21 +260,13 @@ class TkSel:
             author_id: str,
             video_id: str,
             dodo: bool = False
-    ) -> Tuple[bytes, Tuple[str, str, Optional[datetime], Status]]:
+    ) -> Tuple[Union[bytes, List[bytes]], Tuple[str, str, Optional[datetime], Status]]:
         """Récupère le contenu d'une vidéo TikTok en bytes"""
         url = f"https://www.tiktok.com/@{author_id}/video/{video_id}"
 
         self.driver.get(url)
 
         sleep(10)
-
-        try:
-            self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
-            print("Not a video (carousel)")
-            return b"", (author_id, video_id, None, Status.NOT_VIDEO)
-        except NoSuchElementException:
-            pass
-
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivErrorContainer']")
             print("Can't find video (removed, private, etc.)")
@@ -281,31 +274,54 @@ class TkSel:
         except NoSuchElementException:
             pass
 
-        video = self.wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, '//video')
-            )
-        ).get_attribute("src")
+        try:
+            self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
+            print("Not a video (carousel)")
+            # return b"", (author_id, video_id, None, Status.NOT_VIDEO)
+            carrousel = self.driver.find_elements(By.CSS_SELECTOR, "div.swiper-wrapper > div.swiper-slide")
+            video_or_imgs = [slide.find_element(By.CSS_SELECTOR, "img").get_attribute("src") for slide in carrousel]
+        except NoSuchElementException:
+            video_or_imgs  = self.wait.until(
+                EC.presence_of_element_located(
+                    (By.XPATH, '//video')
+                )
+            ).get_attribute("src")
 
         cookies = self.driver.get_cookies()
         s = Session()
         for cookie in cookies:
             s.cookies.set(cookie['name'], cookie['value'])
 
-        try:
-            response = do_request(s, video, self.headers, verify=self.verify)
-            content = response.content
-        except ChunkedEncodingError as e:
-            print(f"Error with video {video_id} from {author_id}")
-            print(e)
-            return b"", (author_id, video_id, None, Status.ERROR)
+        if isinstance(video_or_imgs, str):
+            try:
+                response = do_request(s, video_or_imgs, self.headers, verify=self.verify)
+                content = response.content
+            except ChunkedEncodingError as e:
+                print(f"Error with video {video_id} from {author_id}")
+                print(e)
+                return b"", (author_id, video_id, None, Status.ERROR)
+        else:
+            content = []
+            for idx, img in enumerate(video_or_imgs):
+                try:
+                    response = do_request(s, img, self.headers, verify=self.verify)
+                    content.append(response.content)
+                except ChunkedEncodingError as e:
+                    print(f"Error with video {video_id} from {author_id}")
+                    print(e)
+                    return b"", (author_id, video_id, None, Status.ERROR)
 
         self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
 
         if dodo:
             self.dodo()
 
-        return content, (author_id, video_id, datetime.now(), Status.OK)
+        return content, (
+            author_id,
+            video_id,
+            datetime.now(),
+            Status.OK_VIDEO if isinstance(video_or_imgs, str) else Status.OK_CARROUSEL
+        )
 
     def get_video_file(
             self,
@@ -313,7 +329,7 @@ class TkSel:
             video_id: str,
             file_or_folder: Union[Optional[Union[str, Path]]] = None,
             dodo: bool = False,
-    ) -> Tuple[Path, Tuple[str, str, Optional[datetime], Status]]:
+    ) -> Tuple[Union[Path, List[Path]], Tuple[str, str, Optional[datetime], Status]]:
         """Récupère le contenu d'une vidéo TikTok et l'enregistre dans un fichier"""
 
         if file_or_folder is not None:
@@ -331,8 +347,14 @@ class TkSel:
         if not content:
             return Path(), tup
 
-        with file_or_folder.open(mode='wb') as f:
-            f.write(content)
+        if isinstance(content, list):
+            for idx, img in enumerate(content):
+                this_file = file_or_folder.parent / (file_or_folder.stem + f"_{idx}.jpeg")
+                with this_file.open(mode='wb') as f:
+                    f.write(img)
+        else:
+            with file_or_folder.open(mode='wb') as f:
+                f.write(content)
 
         return file_or_folder, tup
 
@@ -341,7 +363,7 @@ class TkSel:
             author_ids: list[str],
             video_ids: list[str],
             dodo: bool = False
-    ) -> List[Tuple[bytes, Tuple[str, str, Optional[datetime], Status]]]:
+    ) -> List[Tuple[Union[bytes], Tuple[str, str, Optional[datetime], Status]]]:
         """Récupère le contenu de plusieurs vidéos TikTok en bytes"""
         assert len(author_ids) == len(video_ids), "author_ids and video_ids must have the same length"
 
@@ -506,7 +528,8 @@ class TkSel:
 if __name__ == '__main__':
     autoinstall()
     with TkSel(pedro=True, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
-        tksel.auto_main()
+        # tksel.auto_main()
+        tksel.get_video_file("lamethodeantoine", "7374863570082762026", "../../videos/antoine.mp4", dodo=True)
         sleep(10)
     sleep(10)
     print("Done")
