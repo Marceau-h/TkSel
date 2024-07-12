@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "TkSel"
+name = "tksel"
 dynamic = ["version"]
 description = 'Scrapper for Minet csvs on tiktok'
 readme = "README.md"
