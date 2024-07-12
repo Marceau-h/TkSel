@@ -67,6 +67,7 @@ class Status(Enum):
     OK_VIDEO = "OK_VIDEO"
     ERROR = "ERROR"
     NOT_FOUND = "NOT_FOUND"
+    RESTRICTED = "RESTRICTED"
     NOT_VIDEO = "NOT_VIDEO"
 
 
@@ -273,6 +274,23 @@ class TkSel:
             return b"", (author_id, video_id, None, Status.NOT_FOUND)
         except NoSuchElementException:
             pass
+
+        try:
+            # video_container = self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivVideoContainer']")
+            # mask_container = video_container.find_element(By.CSS_SELECTOR, "div[class*='DivM3MaskContainer']")
+            # mask_container.find_element(By.CSS_SELECTOR, "p[class*='PVideoMaskTitle']")
+            ##  div.css-704ozy-DivVideoContainer.eqrezik7 > div.css-1af2j6s-DivM3MaskContainer.e16wy98b0 > div > div > div.css-1qjjlx7-DivVideoMaskInfo.e4uoj5v2 > p.css-6xughc-PVideoMaskTitle.e4uoj5v4
+            self.driver.find_element(
+                By.CSS_SELECTOR,
+                "div[class*='DivVideoContainer'] > div[class*='DivM3MaskContainer'] > div > div "
+                "> div[class*='DivVideoMaskInfo'] > p[class*='PVideoMaskTitle']"
+            )
+
+            print("Can't access the video (restricted content)")
+            return b"", (author_id, video_id, None, Status.RESTRICTED)
+        except NoSuchElementException:
+            pass
+
 
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
@@ -527,9 +545,11 @@ class TkSel:
 
 if __name__ == '__main__':
     autoinstall()
-    with TkSel(pedro=True, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
+    with TkSel(pedro=False, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
         # tksel.auto_main()
-        tksel.get_video_file("lamethodeantoine", "7374863570082762026", "../../videos/antoine.mp4", dodo=True)
-        sleep(10)
-    sleep(10)
+        # tksel.get_video_file("lamethodeantoine", "7374863570082762026", "../../videos/antoine.mp4", dodo=True)
+        tksel.get_video_file("szrzhvfx", "7374988306758520065", "../../videos/test.mp4", dodo=False)
+
+    #     sleep(10)
+    # sleep(10)
     print("Done")
