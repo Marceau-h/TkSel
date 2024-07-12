@@ -141,7 +141,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Update about.py file"
-          file_pattern: "TkSel/__about__.py"
+          file_pattern: "src/TkSel/__about__.py"
           status_options: '--untracked-files=no'
 
       - name: Push changes
