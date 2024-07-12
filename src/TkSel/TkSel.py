@@ -276,10 +276,6 @@ class TkSel:
             pass
 
         try:
-            # video_container = self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivVideoContainer']")
-            # mask_container = video_container.find_element(By.CSS_SELECTOR, "div[class*='DivM3MaskContainer']")
-            # mask_container.find_element(By.CSS_SELECTOR, "p[class*='PVideoMaskTitle']")
-            ##  div.css-704ozy-DivVideoContainer.eqrezik7 > div.css-1af2j6s-DivM3MaskContainer.e16wy98b0 > div > div > div.css-1qjjlx7-DivVideoMaskInfo.e4uoj5v2 > p.css-6xughc-PVideoMaskTitle.e4uoj5v4
             self.driver.find_element(
                 By.CSS_SELECTOR,
                 "div[class*='DivVideoContainer'] > div[class*='DivM3MaskContainer'] > div > div "
