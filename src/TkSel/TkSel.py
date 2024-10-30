@@ -297,14 +297,18 @@ class TkSel:
         except NoSuchElementException:
             video_or_imgs  = self.wait.until(
                 EC.presence_of_element_located(
-                    (By.XPATH, '//video')
+                    (By.XPATH, '//video/source')
                 )
             ).get_attribute("src")
+
+        pass
 
         cookies = self.driver.get_cookies()
         s = Session()
         for cookie in cookies:
             s.cookies.set(cookie['name'], cookie['value'])
+
+        pass
 
         if isinstance(video_or_imgs, str):
             try:
@@ -541,10 +545,10 @@ class TkSel:
 
 if __name__ == '__main__':
     autoinstall()
-    with TkSel(pedro=False, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
+    with TkSel(pedro=not not True, headless=False, skip=False, folder="../../videos", csv="../../meta.csv", sleep_range=(60, 80)) as tksel:
         # tksel.auto_main()
         # tksel.get_video_file("lamethodeantoine", "7374863570082762026", "../../videos/antoine.mp4", dodo=True)
-        tksel.get_video_file("szrzhvfx", "7374988306758520065", "../../videos/test.mp4", dodo=False)
+        tksel.get_video_file("nutrivanna", "7423453154638892294", "../../videos/test.mp4", dodo=False)
 
     #     sleep(10)
     # sleep(10)
