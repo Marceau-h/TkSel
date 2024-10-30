@@ -287,7 +287,6 @@ class TkSel:
         except NoSuchElementException:
             pass
 
-
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div.swiper-wrapper")
             print("Not a video (carousel)")
@@ -295,7 +294,7 @@ class TkSel:
             carrousel = self.driver.find_elements(By.CSS_SELECTOR, "div.swiper-wrapper > div.swiper-slide")
             video_or_imgs = [slide.find_element(By.CSS_SELECTOR, "img").get_attribute("src") for slide in carrousel]
         except NoSuchElementException:
-            video_or_imgs  = self.wait.until(
+            video_or_imgs = self.wait.until(
                 EC.presence_of_element_located(
                     (By.XPATH, '//video/source')
                 )
@@ -327,7 +326,7 @@ class TkSel:
 
         self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
 
-        if dodo and False:
+        if dodo:
             self.dodo()
 
         return content, (
@@ -392,7 +391,6 @@ class TkSel:
             self.get_video_bytes(author_id, video_id, dodo)
             for author_id, video_id in it
         ]
-
 
     def get_videos_files(
             self,
