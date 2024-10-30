@@ -4,7 +4,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from tksel import TkSel, __version__
+from . import TkSel, __version__
 
 
 def main() -> None:
