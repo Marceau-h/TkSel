@@ -4,8 +4,11 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from . import TkSel, __version__
-
+try:
+    from . import TkSel, __version__
+except ImportError:
+    from __about__ import __version__
+    from TkSel import TkSel
 
 def main() -> None:
     parser = ArgumentParser(description="Télécharge les vidéos TikTok à partir d'un fichier csv")
