@@ -301,14 +301,10 @@ class TkSel:
                 )
             ).get_attribute("src")
 
-        pass
-
         cookies = self.driver.get_cookies()
         s = Session()
         for cookie in cookies:
             s.cookies.set(cookie['name'], cookie['value'])
-
-        pass
 
         if isinstance(video_or_imgs, str):
             try:
@@ -331,7 +327,7 @@ class TkSel:
 
         self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
 
-        if dodo:
+        if dodo and False:
             self.dodo()
 
         return content, (
@@ -359,6 +355,8 @@ class TkSel:
 
             else:
                 raise TypeError("file_or_folder must be a string or a Path object")
+        else:
+            file_or_folder = self.folder / f"{author_id}_{video_id}.mp4"
 
         content, tup = self.get_video_bytes(author_id, video_id, dodo)
 
