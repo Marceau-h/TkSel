@@ -4,7 +4,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-from . import TkSel, __version__
+from tksel import TkSel, __version__
 
 
 def main() -> None:
@@ -59,3 +59,7 @@ def main() -> None:
 
     print("Téléchargement terminé")
     exit(0)
+
+
+if __name__ == "__main__":
+    main()
