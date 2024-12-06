@@ -186,6 +186,10 @@ class TkSel:
                 timestamps = df["collect_timestamp"].to_list()
             else:
                 timestamps = [None] * len(df)
+            if "status" in df.columns:
+                statusses = df["status"].to_list()
+            else:
+                statusses = [None] * len(df)
 
             ids = df["video_id"].to_list()
             authors = df["author_id"].to_list()
@@ -196,23 +200,23 @@ class TkSel:
             }
 
             self.videos = [
-                {"video_id": id_, "author_id": author, "collect_timestamp": timestamp}
-                for id_, author, timestamp in zip(ids, authors, timestamps)
+                {"video_id": id_, "author_id": author, "collect_timestamp": timestamp, "status": status}
+                for id_, author, timestamp, status in zip(ids, authors, timestamps, statusses)
             ]
 
             if self.meta_path is not None and self.meta_path.exists():
                 old_df = pl.read_csv(
                     self.meta_path,
-                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime}
+                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime, "status": pl.String}
                 )
                 old_df.filter(
                     pl.col("collect_timestamp").is_not_null()
                 )
                 self.videos.extend(
                     [
-                        {"video_id": id_, "author_id": author, "collect_timestamp": timestamp}
-                        for id_, author, timestamp in
-                        zip(old_df["video_id"], old_df["author_id"], old_df["collect_timestamp"])
+                        {"video_id": id_, "author_id": author, "collect_timestamp": timestamp, "status": status}
+                        for id_, author, timestamp, status in
+                        zip(old_df["video_id"], old_df["author_id"], old_df["collect_timestamp"], old_df["status"])
                     ]
                 )
 
@@ -227,11 +231,11 @@ class TkSel:
             with pl.Config(auto_structify=True):
                 df = pl.DataFrame(
                     self.videos,
-                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime}
+                    schema={"video_id": pl.Int64, "author_id": pl.String, "collect_timestamp": pl.Datetime, "status": pl.String}
                 )
 
         df.filter(
-            pl.col("collect_timestamp").is_not_null()
+            pl.col("collect_timestamp").is_not_null() or pl.col("status").is_not_null()
         )
 
         df.write_csv(self.meta_path)
@@ -271,6 +275,7 @@ class TkSel:
         try:
             self.driver.find_element(By.CSS_SELECTOR, "div[class*='DivErrorContainer']")
             print("Can't find video (removed, private, etc.)")
+            self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now(), "status": Status.NOT_FOUND})
             return b"", (author_id, video_id, None, Status.NOT_FOUND)
         except NoSuchElementException:
             pass
@@ -283,6 +288,7 @@ class TkSel:
             )
 
             print("Can't access the video (restricted content)")
+            self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now(), "status": Status.RESTRICTED})
             return b"", (author_id, video_id, None, Status.RESTRICTED)
         except NoSuchElementException:
             pass
@@ -312,6 +318,7 @@ class TkSel:
             except ChunkedEncodingError as e:
                 print(f"Error with video {video_id} from {author_id}")
                 print(e)
+                self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now(), "status": Status.ERROR})
                 return b"", (author_id, video_id, None, Status.ERROR)
         else:
             content = []
@@ -322,9 +329,11 @@ class TkSel:
                 except ChunkedEncodingError as e:
                     print(f"Error with video {video_id} from {author_id}")
                     print(e)
+                    self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now(), "status": Status.ERROR})
                     return b"", (author_id, video_id, None, Status.ERROR)
 
-        self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now()})
+        status = Status.OK_VIDEO if isinstance(video_or_imgs, str) else Status.OK_CARROUSEL
+        self.videos.append({"video_id": video_id, "author_id": author_id, "collect_timestamp": datetime.now(), "status": status})
 
         if dodo:
             self.dodo()
@@ -333,7 +342,7 @@ class TkSel:
             author_id,
             video_id,
             datetime.now(),
-            Status.OK_VIDEO if isinstance(video_or_imgs, str) else Status.OK_CARROUSEL
+            status
         )
 
     def get_video_file(
